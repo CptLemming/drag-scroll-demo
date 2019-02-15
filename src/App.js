@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { of, combineLatest, interval, fromEvent } from 'rxjs';
+import { of, combineLatest, interval, merge, fromEvent } from 'rxjs';
 import { map, switchMap, throttleTime, takeUntil } from 'rxjs/operators';
 import './App.css';
 
@@ -30,12 +30,21 @@ class App extends Component {
     this.mouseMoveStream = fromEvent(content.current, 'mousemove');
     this.mouseDownStream = fromEvent(content.current, 'mousedown');
     this.mouseUpStream = fromEvent(content.current, 'mouseup');
+    this.touchStartStream = fromEvent(content.current, 'touchstart');
+    this.touchEndStream = fromEvent(content.current, 'touchend');
+    this.touchMoveStream = fromEvent(content.current, 'touchmove');
     this.boundsStream = of(content.current.getBoundingClientRect());
 
-    this.mouseDownStream
+    merge(this.mouseDownStream, this.touchStartStream)
       .pipe(switchMap(() => combineLatest(
           this.boundsStream,
-          this.mouseMoveStream.pipe(throttleTime(200)),
+          merge(
+            this.mouseMoveStream.pipe(throttleTime(200)),
+            this.touchMoveStream.pipe(throttleTime(200)).pipe(map(event => ({
+              clientX: event.touches[0].clientX,
+              clientY: event.touches[0].clientY,
+            })))
+          ),
           interval(50).pipe(map(x => x < 5 ? x + 1 : 5)),
           (bounds, event, speed) => ({
             bounds,
@@ -44,10 +53,13 @@ class App extends Component {
             clientY: event.clientY,
           })
         )
-          .pipe(takeUntil(this.mouseUpStream))
+          .pipe(takeUntil(merge(this.mouseUpStream, this.touchEndStream)))
           .pipe(map(val => {
             const x = val.clientX - val.bounds.left;
             const y = val.clientY - val.bounds.top;
+
+            console.log('x', val.clientX);
+            console.log('y', val.clientY);
     
             let nextScrollLeft = 0;
             let nextScrollTop = 0;
