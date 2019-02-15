@@ -27,6 +27,11 @@
   box-sizing: border-box;
 }
 
+.selectedCell {
+  background: #901234;
+  color: #fff;
+}
+
 .perimiter {
   position: fixed;
   top: 0;

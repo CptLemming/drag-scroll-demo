@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
 import { of, combineLatest, interval, merge, fromEvent } from 'rxjs';
 import { map, switchMap, throttleTime, takeUntil } from 'rxjs/operators';
+import { Grid } from 'react-virtualized';
 import './App.css';
+import 'react-virtualized/styles.css';
 
 const data = [];
 
@@ -19,6 +21,7 @@ for (let x = 0; x < 100; x++) {
 }
 
 const content = React.createRef();
+const grid = React.createRef();
 
 class App extends Component {
   mouseMoveStream;
@@ -26,12 +29,17 @@ class App extends Component {
   mouseUpStream;
   boundsStream;
 
+  state = {
+    isMouseDown: false,
+    scrollX: 0,
+    scrollY: 0,
+    selected: {},
+  };
+
   componentDidMount () {
     this.mouseMoveStream = fromEvent(content.current, 'mousemove');
     this.mouseDownStream = fromEvent(content.current, 'mousedown');
-    this.mouseUpStream = fromEvent(content.current, 'mouseup');
     this.touchStartStream = fromEvent(content.current, 'touchstart');
-    this.touchEndStream = fromEvent(content.current, 'touchend');
     this.touchMoveStream = fromEvent(content.current, 'touchmove');
     this.boundsStream = of(content.current.getBoundingClientRect());
 
@@ -53,19 +61,16 @@ class App extends Component {
             clientY: event.clientY,
           })
         )
-          .pipe(takeUntil(merge(this.mouseUpStream, this.touchEndStream)))
+          .pipe(takeUntil(merge(fromEvent(document, 'mouseup'), fromEvent(document, 'touchend'))))
           .pipe(map(val => {
             const x = val.clientX - val.bounds.left;
             const y = val.clientY - val.bounds.top;
-
-            console.log('x', val.clientX);
-            console.log('y', val.clientY);
     
             let nextScrollLeft = 0;
             let nextScrollTop = 0;
             const xSpeed = val.speed;
             const ySpeed = val.speed;
-            const move = 25;
+            const move = 10;
             const border = 50;
 
             if (x < border) {
@@ -85,37 +90,97 @@ class App extends Component {
             };
           }))
         ))
-        // .pipe(bufferTime(200))
-        // .pipe(filter(values => values.length > 0))
-        // .pipe(map(values => values[values.length - 1]))
         .subscribe(next => {
-          const currentScrollTop = content.current.scrollTop;
-          const currentScrollLeft = content.current.scrollLeft;
+          // const currentScrollTop = content.current.scrollTop;
+          // const currentScrollLeft = content.current.scrollLeft;
+          const currentScrollTop = this.state.scrollY;
+          const currentScrollLeft = this.state.scrollX;
           const nextScrollTop = currentScrollTop + next.top;
           const nextScrollLeft = currentScrollLeft + next.left;
 
           if (nextScrollTop !== currentScrollTop || nextScrollLeft !== currentScrollLeft) {
-            content.current.scrollTo(nextScrollLeft, nextScrollTop);
+            // content.current.scrollTo(nextScrollLeft, nextScrollTop);
+            this.setState({
+              scrollX: nextScrollLeft,
+              scrollY: nextScrollTop,
+            });
           }
         });
+  }
+
+  handleSelect = (key) => () => {
+    this.setState(({ selected }) => ({
+      isMouseDown: true,
+      selected: {
+        ...selected,
+        [key]: !selected[key],
+      },
+    }));
+
+    document.addEventListener('mouseup', () => {
+      this.setState({ isMouseDown: false });
+    });
+  };
+
+  handleOver = (key) => () => {
+    if (this.state.isMouseDown) {
+      this.setState(({ selected }) => ({
+        selected: {
+          ...selected,
+          [key]: true,
+        },
+      }));
+    }
+  }
+
+  cellRenderer = ({ columnIndex, key, rowIndex, style }) => {
+    const cell = data[rowIndex][columnIndex];
+    return (
+      <div
+        key={key}
+        style={style}
+        className={this.state.selected[key] ? 'selectedCell' : ''}
+        onMouseDown={this.handleSelect(key)}
+        onMouseOver={this.handleOver(key)}
+      >
+        {`${cell.x}-${cell.y}`}
+      </div>
+    )  
   }
 
   render() {
     return (
       <div className="app">
         <div className="perimiter">
-        <div className="container">
-          <div className="content" ref={content}>
-            <div className="perimiter__inner" />
-              {data.map((row, rowIndex) => (
-                <div key={rowIndex} className="row">
-                  {row.map(cell => (
-                    <div key={`${cell.x}:${cell.y}`} className="cell">
-                      {`${cell.x}-${cell.y}`}
-                    </div>
-                  ))}
-                </div>
-              ))}
+          <div className="container">
+            <div className="content" ref={content}>
+              {/* <div className="perimiter__inner" />
+                {data.map((row, rowIndex) => (
+                  <div key={rowIndex} className="row">
+                    {row.map(cell => (
+                      <div key={`${cell.x}:${cell.y}`} className="cell">
+                        {`${cell.x}-${cell.y}`}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div> */}
+              <Grid
+                ref={grid}
+                cellRenderer={this.cellRenderer}
+                columnCount={data[0].length}
+                columnWidth={100}
+                height={600}
+                rowCount={data.length}
+                rowHeight={100}
+                width={1300}
+                scrollLeft={this.state.scrollX}
+                scrollTop={this.state.scrollY}
+                onScroll={({ scrollTop, scrollLeft }) => this.setState({
+                  scrollX: scrollLeft,
+                  scrollY: scrollTop,
+                })}
+              />
             </div>
           </div>
         </div>
