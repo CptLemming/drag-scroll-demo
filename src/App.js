@@ -71,7 +71,7 @@ class App extends Component {
             const xSpeed = val.speed;
             const ySpeed = val.speed;
             const move = 10;
-            const border = 50;
+            const border = 100;
 
             if (x < border) {
               nextScrollLeft = -1 * move * xSpeed;
